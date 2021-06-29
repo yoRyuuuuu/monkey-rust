@@ -114,6 +114,7 @@ impl<'a> Parser<'a> {
         let left_exp = match &self.cur_token.kind {
             TokenKind::Ident => self.parse_prefix(),
             TokenKind::Int => self.parse_int(),
+            TokenKind::Bang | TokenKind::Minus => self.parse_prefix_expression(),
             _ => Err(anyhow!("parse_expression()")),
         };
 
@@ -231,23 +232,21 @@ mod tests {
     }
 
     #[test]
-    fn test_integer_literal_expression() {
+    fn test_integer_literal_expression() -> Result<()> {
         let input = r#"5;"#;
         let lexer = Lexer::new(&input);
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        let program = parser.parse_program()?;
         assert_eq!(program.statements.len(), 1);
 
         let stmt = program.statements[0].clone();
-        match stmt {
-            ExpressionStatement(exp) => match exp {
-                Int(num) => assert_eq!(num, 5),
-                _ => (),
-            },
-            _ => (),
-        }
+        let t = ExpressionStatement(Int(5));
+        assert_eq!(stmt, t);
+
+        Ok(())
     }
 
+    #[test]
     fn test_parsing_prefix_expression() -> Result<()> {
         let prefix_tests = vec![("!5;", "!", 5), ("-15;", "-", 15)];
 
@@ -256,6 +255,12 @@ mod tests {
             let mut parser = Parser::new(lexer);
             let program = parser.parse_program()?;
             assert_eq!(program.statements.len(), 1);
+            let stmt = program.statements[0].clone();
+            let t = ExpressionStatement(Prefix {
+                op: test.1.to_string(),
+                right: Box::new(Int(test.2)),
+            });
+            assert_eq!(stmt, t);
         }
 
         Ok(())
