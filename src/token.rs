@@ -1,3 +1,5 @@
+use crate::ast::Precedence;
+
 pub fn look_up_Ident(ident: &str) -> TokenKind {
     match ident {
         "let" => TokenKind::Let,
@@ -7,7 +9,7 @@ pub fn look_up_Ident(ident: &str) -> TokenKind {
         "return" => TokenKind::Return,
         "false" => TokenKind::False,
         "true" => TokenKind::True,
-        _ => TokenKind::Ident
+        _ => TokenKind::Ident,
     }
 }
 
@@ -54,5 +56,18 @@ pub struct Token {
     pub literal: String,
 }
 
-
-
+impl Token {
+    pub fn get_precedence(&self) -> Precedence {
+        match self.kind {
+            TokenKind::Equal => Precedence::Equals,
+            TokenKind::NotEqual => Precedence::Equals,
+            TokenKind::LessThan => Precedence::Lessgreater,
+            TokenKind::GreaterThan => Precedence::Lessgreater,
+            TokenKind::Plus => Precedence::Sum,
+            TokenKind::Minus => Precedence::Sum,
+            TokenKind::Slash => Precedence::Product,
+            TokenKind::Aster => Precedence::Product,
+            _ => Precedence::Lowest,
+        }
+    }
+}

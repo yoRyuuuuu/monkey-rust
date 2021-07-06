@@ -13,8 +13,8 @@ fn prompt(s: &str) -> io::Result<()> {
     use std::io::{stdout, Write};
     let stdout = stdout();
     let mut stdout = stdout.lock();
-    stdout.write(s.as_bytes())?;
-    return stdout.flush();
+    stdout.write_all(s.as_bytes())?;
+    Ok(())
 }
 
 fn main() {

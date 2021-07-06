@@ -2,7 +2,7 @@ use crate::ast::{
     Expression, Expression::*, Precedence, Precedence::*, Program, Statement, Statement::*,
 };
 
-use crate::errors::ParserError;
+use crate::errors::MonkeyError;
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenKind};
 use anyhow::{anyhow, Context, Result};
@@ -18,7 +18,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(lexer: Lexer) -> Parser {
         let mut parser = Parser {
-            lexer: lexer,
+            lexer,
             cur_token: Token {
                 kind: TokenKind::Eof,
                 literal: String::from(""),
@@ -47,9 +47,7 @@ impl<'a> Parser<'a> {
             self.next_token();
         }
 
-        Ok(Program {
-            statements: statements,
-        })
+        Ok(Program { statements })
     }
 
     fn parse_statement(&mut self) -> Result<Statement> {
@@ -62,19 +60,21 @@ impl<'a> Parser<'a> {
 
     fn parse_let_statement(&mut self) -> Result<Statement> {
         if !self.expect_peek(TokenKind::Ident) {
-            return Err(ParserError::TokenInvalid(TokenKind::Ident, self.cur_token.clone()).into());
+            return Err(
+                MonkeyError::UnexpectedToken(TokenKind::Ident, self.cur_token.clone()).into(),
+            );
         }
         let ident = Expression::Ident(self.cur_token.literal.clone());
         if !self.expect_peek(TokenKind::Assign) {
             return Err(
-                ParserError::TokenInvalid(TokenKind::Assign, self.peek_token.clone()).into(),
+                MonkeyError::UnexpectedToken(TokenKind::Assign, self.peek_token.clone()).into(),
             );
         }
         while !self.cur_token_is(TokenKind::Semicolon) {
             self.next_token();
         }
         let stmt = Statement::LetStatement {
-            ident: ident,
+            ident,
             value: Expression::Ident("".to_string()),
         };
         Ok(stmt)
@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression_statement(&mut self) -> Result<Statement> {
-        let exp = self.parse_expression(LOWEST)?;
+        let exp = self.parse_expression(Precedence::Lowest)?;
         if self.peek_token_is(TokenKind::Semicolon) {
             self.next_token();
         }
@@ -101,24 +101,54 @@ impl<'a> Parser<'a> {
     fn parse_prefix_expression(&mut self) -> Result<Expression> {
         let op = self.cur_token.literal.clone();
         self.next_token();
-        let right = self.parse_expression(Precedence::PREFIX)?;
+        let right = self.parse_expression(Precedence::Prefix)?;
         let expression = Expression::Prefix {
-            op: op,
+            op,
             right: Box::new(right),
         };
-
         Ok(expression)
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Result<Expression> {
-        let left_exp = match &self.cur_token.kind {
+        let mut left_expr = match &self.cur_token.kind {
             TokenKind::Ident => self.parse_prefix(),
             TokenKind::Int => self.parse_int(),
             TokenKind::Bang | TokenKind::Minus => self.parse_prefix_expression(),
-            _ => Err(anyhow!("parse_expression()")),
+            _ => return Err(MonkeyError::InvalidToken(self.cur_token.clone()).into()),
+        }?;
+
+        while !self.peek_token_is(TokenKind::Semicolon) && precedence < self.peek_precedence() {
+            left_expr = match self.peek_token.kind {
+                TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Slash
+                | TokenKind::Aster
+                | TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::LessThan
+                | TokenKind::GreaterThan => {
+                    self.next_token();
+                    self.parse_infix_expression(left_expr)?
+                }
+                _ => left_expr,
+            }
+        }
+
+        Ok(left_expr)
+    }
+
+    fn parse_infix_expression(&mut self, left: Expression) -> Result<Expression> {
+        let op = self.cur_token.literal.clone();
+        let precedence = self.cur_precedence();
+        self.next_token();
+        let right = self.parse_expression(precedence)?;
+        let expr = Expression::Infix {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
         };
 
-        left_exp
+        Ok(expr)
     }
 
     fn parse_prefix(&mut self) -> Result<Expression> {
@@ -143,9 +173,11 @@ impl<'a> Parser<'a> {
     fn cur_token_is(&self, tok: TokenKind) -> bool {
         self.cur_token.kind == tok
     }
+
     fn peek_token_is(&self, tok: TokenKind) -> bool {
         self.peek_token.kind == tok
     }
+
     fn expect_peek(&mut self, tok: TokenKind) -> bool {
         if self.peek_token_is(tok) {
             self.next_token();
@@ -153,6 +185,14 @@ impl<'a> Parser<'a> {
         } else {
             return false;
         }
+    }
+
+    fn cur_precedence(&self) -> Precedence {
+        return self.cur_token.get_precedence();
+    }
+
+    fn peek_precedence(&self) -> Precedence {
+        return self.peek_token.get_precedence();
     }
 }
 
@@ -263,6 +303,35 @@ mod tests {
             assert_eq!(stmt, t);
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_parsing_infix_expressions() -> Result<()> {
+        let infix_tests = vec![
+            ("5 + 5;", 5, "+", 5),
+            ("5 - 5;", 5, "-", 5),
+            ("5 * 5;", 5, "*", 5),
+            ("5 / 5;", 5, "/", 5),
+            ("5 > 5;", 5, ">", 5),
+            ("5 < 5;", 5, "<", 5),
+            ("5 == 5;", 5, "==", 5),
+            ("5 != 5;", 5, "!=", 5),
+        ];
+
+        for test in infix_tests {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program()?;
+            assert_eq!(program.statements.len(), 1);
+            let stmt = program.statements[0].clone();
+            let t = ExpressionStatement(Infix {
+                left: Box::new(Int(test.1)),
+                op: test.2.to_string(),
+                right: Box::new(Int(test.3)),
+            });
+            assert_eq!(stmt, t);
+        }
         Ok(())
     }
 }
