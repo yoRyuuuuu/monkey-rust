@@ -1,4 +1,4 @@
-use crate::token::{Token, TokenKind, TokenKind::*};
+use crate::token::{Token, TokenKind};
 
 #[derive(Debug, Clone)]
 pub struct Lexer<'a> {
@@ -48,46 +48,43 @@ impl<'a> Lexer<'a> {
             b'=' => {
                 if self.peek_char() == b'=' {
                     self.read_char();
-                    token!(Equal, "==")
+                    token!(TokenKind::Equal, "==")
                 } else {
-                    token!(Assign, "=")
+                    token!(TokenKind::Assign, "=")
                 }
             }
-            b'+' => token!(Plus, "+"),
-            b'-' => token!(Minus, "-"),
-            b'/' => token!(Slash, "/"),
-            b'*' => token!(Aster, "*"),
+            b'+' => token!(TokenKind::Plus, "+"),
+            b'-' => token!(TokenKind::Minus, "-"),
+            b'/' => token!(TokenKind::Slash, "/"),
+            b'*' => token!(TokenKind::Aster, "*"),
             b'!' => {
                 if self.peek_char() == b'=' {
                     self.read_char();
-                    token!(NotEqual, "!=")
+                    token!(TokenKind::NotEqual, "!=")
                 } else {
-                    token!(Bang, "!")
+                    token!(TokenKind::Bang, "!")
                 }
             }
-            b';' => token!(Semicolon, ";"),
-            b'(' => token!(Lparen, "("),
-            b')' => token!(Rparen, ")"),
-            b',' => token!(Comma, ","),
-            b'{' => token!(Lbrace, "{"),
-            b'}' => token!(Rbrace, "}"),
-            b'>' => token!(GreaterThan, ">"),
-            b'<' => token!(LessThan, "<"),
+            b';' => token!(TokenKind::Semicolon, ";"),
+            b'(' => token!(TokenKind::Lparen, "("),
+            b')' => token!(TokenKind::Rparen, ")"),
+            b',' => token!(TokenKind::Comma, ","),
+            b'{' => token!(TokenKind::Lbrace, "{"),
+            b'}' => token!(TokenKind::Rbrace, "}"),
+            b'>' => token!(TokenKind::GreaterThan, ">"),
+            b'<' => token!(TokenKind::LessThan, "<"),
             b'a'..=b'z' | b'A'..=b'Z' => {
-                let ident = self.read_identifier();
-                let tk = crate::token::look_up_Ident(&ident);
-                return Token {
-                    kind: tk,
-                    literal: ident,
-                };
+                let literal = self.read_identifier();
+                let kind = crate::token::look_up_ident(&literal);
+                return Token { kind, literal };
             }
             b'0'..=b'9' => {
                 return Token {
-                    kind: Int,
+                    kind: TokenKind::Int,
                     literal: self.read_number(),
                 }
             }
-            _ => token!(Eof, ""),
+            _ => token!(TokenKind::Eof, ""),
         };
 
         self.read_char();
@@ -128,7 +125,7 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use crate::lexer::Lexer;
-    use crate::token::{Token, TokenKind, TokenKind::*};
+    use crate::token::{Token, TokenKind::*};
 
     #[test]
     fn test_next_token() {

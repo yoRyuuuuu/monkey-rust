@@ -1,6 +1,6 @@
 use crate::ast::Precedence;
 
-pub fn look_up_Ident(ident: &str) -> TokenKind {
+pub fn look_up_ident(ident: &str) -> TokenKind {
     match ident {
         "let" => TokenKind::Let,
         "fn" => TokenKind::Function,
@@ -15,7 +15,6 @@ pub fn look_up_Ident(ident: &str) -> TokenKind {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
-    Illegal,
     Eof,
 
     Ident,
@@ -67,6 +66,7 @@ impl Token {
             TokenKind::Minus => Precedence::Sum,
             TokenKind::Slash => Precedence::Product,
             TokenKind::Aster => Precedence::Product,
+            TokenKind::Lparen => Precedence::Call,
             _ => Precedence::Lowest,
         }
     }
