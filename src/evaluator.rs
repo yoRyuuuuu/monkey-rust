@@ -34,7 +34,7 @@ impl Evaluator {
             Expression::Boolean(value) => Ok(Object::Boolean(value)),
             Expression::Prefix { op, right } => {
                 let right = self.evaluate_expression(*right)?;
-                self.evaluate_prefix_expression(op, right)
+                Ok(self.evaluate_prefix_expression(op, right))
             }
             Expression::Infix { left, op, right } => todo!(),
             Expression::If {
@@ -50,19 +50,27 @@ impl Evaluator {
         }
     }
 
-    fn evaluate_prefix_expression(&mut self, op: String, right: Object) -> Result<Object> {
+    fn evaluate_prefix_expression(&mut self, op: String, right: Object) -> Object {
         match op.as_str() {
             "!" => self.evaluate_bang_operator_expression(right),
-            _ => Ok(Object::Null),
+            "-" => self.evaluate_minus_prefix_operator_expression(right),
+            _ => Object::Null,
         }
     }
 
-    fn evaluate_bang_operator_expression(&mut self, right: Object) -> Result<Object> {
+    fn evaluate_minus_prefix_operator_expression(&mut self, right: Object) -> Object {
         match right {
-            Object::Boolean(true) => Ok(Object::Boolean(false)),
-            Object::Boolean(false) => Ok(Object::Boolean(true)),
-            Object::Null => Ok(Object::Boolean(true)),
-            _ => Ok(Object::Boolean(false)),
+            Object::Int(value) => Object::Int(-value),
+            _ => Object::Null,
+        }
+    }
+
+    fn evaluate_bang_operator_expression(&mut self, right: Object) -> Object {
+        match right {
+            Object::Boolean(true) => Object::Boolean(false),
+            Object::Boolean(false) => Object::Boolean(true),
+            Object::Null => Object::Boolean(true),
+            _ => Object::Boolean(false),
         }
     }
 }
@@ -73,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_eval_interger_expression() {
-        let tests = vec![("5", 5), ("10", 10)];
+        let tests = vec![("5", 5), ("10", 10), ("-5", -5), ("-10", -10)];
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Int(test.1));
