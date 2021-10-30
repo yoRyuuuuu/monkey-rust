@@ -11,8 +11,8 @@ impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Object::Int(value) => write!(f, "{}", value),
-            Object::Boolean(_) => todo!(),
-            Object::Null => todo!(),
+            Object::Boolean(value) => write!(f, "{}", value),
+            Object::Null => write!(f, "null"),
         }
     }
 }
