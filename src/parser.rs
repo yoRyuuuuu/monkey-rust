@@ -376,9 +376,13 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[cfg(tests)]
+#[cfg(test)]
 mod tests {
-    use crate::ast::{Expression, Program, Statement};
+    use crate::{
+        ast::{Expression, Program, Statement},
+        lexer::Lexer,
+        parser::Parser,
+    };
 
     #[test]
     fn test_string() {
@@ -416,7 +420,7 @@ mod tests {
             ),
         };
 
-        let (condition, consequence, alternative) = match expr {
+        let (_, consequence, _) = match expr {
             Expression::If {
                 condition,
                 consequence,
@@ -477,5 +481,5 @@ mod tests {
         let program = parser.parse_program().unwrap();
         let stmts = program.statements[0].clone();
         assert_eq!(stmts.to_string(), test);
-    } 
+    }
 }
