@@ -32,7 +32,10 @@ impl Evaluator {
             Expression::Int(value) => Ok(Object::Int(value)),
             Expression::Ident(_) => todo!(),
             Expression::Boolean(value) => Ok(Object::Boolean(value)),
-            Expression::Prefix { op, right } => todo!(),
+            Expression::Prefix { op, right } => {
+                let right = self.evaluate_expression(*right)?;
+                self.evaluate_prefix_expression(op, right)
+            }
             Expression::Infix { left, op, right } => todo!(),
             Expression::If {
                 condition,
@@ -44,6 +47,22 @@ impl Evaluator {
                 function,
                 arguments,
             } => todo!(),
+        }
+    }
+
+    fn evaluate_prefix_expression(&mut self, op: String, right: Object) -> Result<Object> {
+        match op.as_str() {
+            "!" => self.evaluate_bang_operator_expression(right),
+            _ => Ok(Object::Null),
+        }
+    }
+
+    fn evaluate_bang_operator_expression(&mut self, right: Object) -> Result<Object> {
+        match right {
+            Object::Boolean(true) => Ok(Object::Boolean(false)),
+            Object::Boolean(false) => Ok(Object::Boolean(true)),
+            Object::Null => Ok(Object::Boolean(true)),
+            _ => Ok(Object::Boolean(false)),
         }
     }
 }
@@ -63,7 +82,15 @@ mod tests {
 
     #[test]
     fn test_eval_boolean_expression() {
-        let tests = vec![("true", true), ("false", false)];
+        let tests = vec![
+            ("true", true),
+            ("false", false),
+            ("!5", false),
+            ("!!true", true),
+            ("!!false", false),
+            ("!!5", true),
+        ];
+
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Boolean(test.1));
