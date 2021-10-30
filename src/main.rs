@@ -3,18 +3,15 @@ use crate::parser::Parser;
 
 mod ast;
 mod errors;
+mod evaluator;
 mod lexer;
+mod object;
 mod parser;
 mod token;
 
 use std::io::{self, Write};
 
 fn main() {
-    // let stdin = stdin();
-    // let stdin = stdin.lock();
-    // let stdin = BufReader::new(stdin);
-    // let mut lines = stdin.lines();
-
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
