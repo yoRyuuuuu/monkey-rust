@@ -1,5 +1,5 @@
 use crate::ast::{Expression, Program, Statement};
-use crate::object::Object;
+use crate::object::{self, Object};
 use anyhow::Result;
 
 pub struct Evaluator {}
@@ -36,7 +36,11 @@ impl Evaluator {
                 let right = self.evaluate_expression(*right)?;
                 Ok(self.evaluate_prefix_expression(op, right))
             }
-            Expression::Infix { left, op, right } => todo!(),
+            Expression::Infix { left, op, right } => {
+                let left = self.evaluate_expression(*left)?;
+                let right = self.evaluate_expression(*right)?;
+                Ok(self.evaluate_infix_expression(op, left, right))
+            }
             Expression::If {
                 condition,
                 consequence,
@@ -54,6 +58,29 @@ impl Evaluator {
         match op.as_str() {
             "!" => self.evaluate_bang_operator_expression(right),
             "-" => self.evaluate_minus_prefix_operator_expression(right),
+            _ => Object::Null,
+        }
+    }
+
+    fn evaluate_infix_expression(&mut self, op: String, left: Object, right: Object) -> Object {
+        match (op.as_str(), left, right) {
+            (_, Object::Int(l), Object::Int(r)) => self.evaluate_int_infix_expression(op, l, r),
+            ("==", Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l == r),
+            ("!=", Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l != r),
+            _ => Object::Null,
+        }
+    }
+
+    fn evaluate_int_infix_expression(&mut self, op: String, left: i64, right: i64) -> Object {
+        match op.as_str() {
+            "+" => Object::Int(left + right),
+            "-" => Object::Int(left - right),
+            "*" => Object::Int(left * right),
+            "/" => Object::Int(left / right),
+            "<" => Object::Boolean(left < right),
+            ">" => Object::Boolean(left > right),
+            "==" => Object::Boolean(left == right),
+            "!=" => Object::Boolean(left != right),
             _ => Object::Null,
         }
     }
@@ -81,7 +108,23 @@ mod tests {
 
     #[test]
     fn test_eval_interger_expression() {
-        let tests = vec![("5", 5), ("10", 10), ("-5", -5), ("-10", -10)];
+        let tests = vec![
+            ("5", 5),
+            ("10", 10),
+            ("-5", -5),
+            ("-10", -10),
+            ("5 + 5 + 5 + 5 - 10", 10),
+            ("2 * 2 * 2 * 2 * 2", 32),
+            ("-50 + 100 + -50", 0),
+            ("5 * 2 + 10", 20),
+            ("20 + 2 * -10", 0),
+            ("50 / 2 * 2 + 10", 60),
+            ("2 * (5 + 10)", 30),
+            ("3 * 3 * 3 + 10", 37),
+            ("3 * (3 * 3) + 10", 37),
+            ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
+        ];
+
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Int(test.1));
@@ -97,6 +140,23 @@ mod tests {
             ("!!true", true),
             ("!!false", false),
             ("!!5", true),
+            ("1 < 2", true),
+            ("1 > 2", false),
+            ("1 < 1", false),
+            ("1 > 1", false),
+            ("1 == 1", true),
+            ("1 != 1", false),
+            ("1 == 2", false),
+            ("1 != 2", true),
+            ("true == true", true),
+            ("false == false", true),
+            ("true == false", false),
+            ("true != false", true),
+            ("false != true", true),
+            ("(1 < 2) == true", true),
+            ("(1 < 2) == false", false),
+            ("(1 > 2) == true", false),
+            ("(1 > 2) == false", true),
         ];
 
         for test in tests {
