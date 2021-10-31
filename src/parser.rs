@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_if_expression() {
-        let input = "if (x < y) { x }";
+        let input = "if (x < y) { x } else { y }";
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program().unwrap();
@@ -425,7 +425,14 @@ mod tests {
                 condition,
                 consequence,
                 alternative,
-            } => (*condition, consequence, alternative),
+            } => {
+                assert_eq!(condition.to_string(), "(x < y)");
+                assert_eq!(consequence.to_string(), "x");
+                if let Some(ref alternative) = alternative {
+                    assert_eq!(alternative.to_string(), "y");
+                }
+                (*condition, consequence, alternative)
+            }
             _ => panic!("expr is not Expression::If. got={}", expr),
         };
 
