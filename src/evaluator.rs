@@ -100,6 +100,7 @@ impl Evaluator {
             _ => Object::Boolean(false),
         }
     }
+    
 }
 
 #[cfg(test)]
@@ -107,7 +108,7 @@ mod tests {
     use crate::{evaluator::Evaluator, lexer::Lexer, object::Object, parser::Parser};
 
     #[test]
-    fn test_eval_interger_expression() {
+    fn test_evaluate_interger_expression() {
         let tests = vec![
             ("5", 5),
             ("10", 10),
@@ -132,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_boolean_expression() {
+    fn test_evaluate_boolean_expression() {
         let tests = vec![
             ("true", true),
             ("false", false),
@@ -162,6 +163,24 @@ mod tests {
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Boolean(test.1));
+        }
+    }
+
+    #[test]
+    fn test_if_else_expression() {
+        let tests = vec![
+            ("if (true) { 10 }", Object::Int(10)),
+            ("if (false) { 10 }", Object::Null),
+            ("if (1) { 10 }", Object::Int(10)),
+            ("if (1 < 2) { 10 }", Object::Int(10)),
+            ("if (1 > 2) { 10 }", Object::Null),
+            ("if (1 > 2) { 10 } else { 20 }", Object::Int(20)),
+            ("if (1 < 2) { 10 } else { 20 }", Object::Int(10)),
+        ];
+
+        for test in tests {
+            let object = test_evaluate(test.0);
+            assert_eq!(object, test.1);
         }
     }
 
