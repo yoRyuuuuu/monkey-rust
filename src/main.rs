@@ -21,7 +21,7 @@ fn main() {
         let mut parser = Parser::new(lexer);
         let mut evaluator = Evaluator::new();
         match parser.parse_program() {
-            Ok(program) => match evaluator.evaluate(program) {
+            Ok(program) => match evaluator.evaluate_program(program) {
                 Ok(object) => println!("{}", object),
                 Err(e) => eprintln!("{}", e),
             },

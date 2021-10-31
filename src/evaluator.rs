@@ -1,4 +1,4 @@
-use crate::ast::{Expression, Program, Statement};
+use crate::ast::{BlockStatement, Expression, Program, Statement};
 use crate::object::{self, Object};
 use anyhow::Result;
 
@@ -10,21 +10,42 @@ impl Evaluator {
         evaluator
     }
 
-    pub fn evaluate(&mut self, program: Program) -> Result<Object> {
-        let mut result = Object::Null;
-        for stmt in program.statements {
-            result = self.evaluate_statement(stmt)?;
+    pub fn evaluate_program(&mut self, stmts: Program) -> Result<Object> {
+        let mut obj = Object::Null;
+        for stmt in stmts.statements {
+            obj = self.evaluate_statement(stmt)?;
+            match obj {
+                Object::Return(value) => return Ok(*value),
+                _ => (),
+            }
         }
 
-        Ok(result)
+        Ok(obj)
+    }
+
+    fn evaluate_block_statement(&mut self, block: BlockStatement) -> Result<Object> {
+        let mut obj = Object::Null;
+        for stmt in block.statements {
+            obj = self.evaluate_statement(stmt)?;
+            match obj {
+                Object::Return(_) => return Ok(obj),
+                _ => (),
+            }
+        }
+        Ok(obj)
     }
 
     pub fn evaluate_statement(&mut self, stmt: Statement) -> Result<Object> {
         match stmt {
             Statement::Expression(expr) => self.evaluate_expression(expr),
             Statement::Let { ident, value } => todo!(),
-            Statement::Return(_) => todo!(),
+            Statement::Return(expr) => self.evaluate_return_statement(expr),
         }
+    }
+
+    fn evaluate_return_statement(&mut self, expr: Expression) -> Result<Object> {
+        let obj = self.evaluate_expression(expr)?;
+        Ok(Object::Return(Box::new(obj)))
     }
 
     pub fn evaluate_expression(&mut self, expr: Expression) -> Result<Object> {
@@ -45,13 +66,31 @@ impl Evaluator {
                 condition,
                 consequence,
                 alternative,
-            } => todo!(),
+            } => self.evaluate_if_expression(*condition, consequence, alternative),
             Expression::Function { parameters, body } => todo!(),
             Expression::Call {
                 function,
                 arguments,
             } => todo!(),
         }
+    }
+
+    fn evaluate_if_expression(
+        &mut self,
+        condition: Expression,
+        consequence: BlockStatement,
+        alternative: Option<BlockStatement>,
+    ) -> Result<Object> {
+        let condition = self.evaluate_expression(condition)?;
+        if Self::is_truthy(condition) {
+            return self.evaluate_block_statement(consequence);
+        }
+
+        if let Some(alternative) = alternative {
+            return self.evaluate_block_statement(alternative);
+        }
+
+        Ok(Object::Null)
     }
 
     fn evaluate_prefix_expression(&mut self, op: String, right: Object) -> Object {
@@ -100,7 +139,14 @@ impl Evaluator {
             _ => Object::Boolean(false),
         }
     }
-    
+
+    fn is_truthy(obj: Object) -> bool {
+        match obj {
+            Object::Null => false,
+            Object::Boolean(value) => value,
+            _ => true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -184,11 +230,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_return_statement() {
+        let tests = vec![
+            ("return 10;", 10),
+            ("return 10; 9;", 10),
+            ("return 2 * 5; 9;", 10),
+            ("9; return 2 * 5; 9;", 10),
+            (
+                r#"if (10 > 1) {
+if (10 > 1) {
+    return 10;
+    }
+}"#,
+                10,
+            ),
+        ];
+
+        for test in tests {
+            let object = test_evaluate(test.0);
+            assert_eq!(object, Object::Int(test.1));
+        }
+    }
+
     fn test_evaluate(input: &str) -> Object {
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program().unwrap();
         let mut evaluator = Evaluator::new();
-        evaluator.evaluate(program).unwrap()
+        evaluator.evaluate_program(program).unwrap()
     }
 }
