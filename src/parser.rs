@@ -289,10 +289,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let mut statements = vec![];
         while !self.cur_token_is(TokenKind::Eof) {
-            let stmt = self.parse_statement();
-            if let Ok(stmt) = stmt {
-                statements.push(stmt);
-            }
+            let stmt = self.parse_statement()?;
+            statements.push(stmt);
             self.next_token();
         }
 
