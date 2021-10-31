@@ -76,9 +76,9 @@ impl fmt::Display for Expression {
                 consequence,
                 alternative,
             } => {
-                write!(f, "if {} {}", condition, consequence)?;
+                write!(f, "if {} {{ {} }}", condition, consequence)?;
                 match alternative {
-                    Some(statements) => write!(f, "{}", statements)?,
+                    Some(statements) => write!(f, "else {{ {} }}", statements)?,
                     None => (),
                 };
 

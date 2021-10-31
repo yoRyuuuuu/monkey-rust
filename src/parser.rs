@@ -144,7 +144,7 @@ impl<'a> Parser<'a> {
                     self.parse_call_expression(left_expr)?
                 }
                 _ => left_expr,
-            }
+            };
         }
 
         Ok(left_expr)
@@ -240,7 +240,7 @@ impl<'a> Parser<'a> {
     fn parse_if_expression(&mut self) -> Result<Expression> {
         if !self.expect_peek(TokenKind::Lparen) {
             return Err(
-                MonkeyError::UnexpectedToken(TokenKind::Lparen, self.cur_token.clone()).into(),
+                MonkeyError::UnexpectedToken(TokenKind::Lparen, self.peek_token.clone()).into(),
             );
         }
 
@@ -249,13 +249,13 @@ impl<'a> Parser<'a> {
 
         if !self.expect_peek(TokenKind::Rparen) {
             return Err(
-                MonkeyError::UnexpectedToken(TokenKind::Rparen, self.cur_token.clone()).into(),
+                MonkeyError::UnexpectedToken(TokenKind::Rparen, self.peek_token.clone()).into(),
             );
         }
 
         if !self.expect_peek(TokenKind::Lbrace) {
             return Err(
-                MonkeyError::UnexpectedToken(TokenKind::Lbrace, self.cur_token.clone()).into(),
+                MonkeyError::UnexpectedToken(TokenKind::Lbrace, self.peek_token.clone()).into(),
             );
         }
 
@@ -265,10 +265,10 @@ impl<'a> Parser<'a> {
         if self.peek_token_is(TokenKind::Else) {
             self.next_token();
 
-            if !self.peek_token_is(TokenKind::Lbrace) {
+            if !self.expect_peek(TokenKind::Lbrace) {
                 return Err(MonkeyError::UnexpectedToken(
                     TokenKind::Lbrace,
-                    self.cur_token.clone(),
+                    self.peek_token.clone(),
                 )
                 .into());
             }
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
     fn parse_block_statement(&mut self) -> Result<BlockStatement> {
         self.next_token();
         let mut statements = vec![];
-        while !self.cur_token_is(TokenKind::Eof) {
+        while !self.cur_token_is(TokenKind::Rbrace) && !self.cur_token_is(TokenKind::Eof) {
             let stmt = self.parse_statement()?;
             statements.push(stmt);
             self.next_token();
