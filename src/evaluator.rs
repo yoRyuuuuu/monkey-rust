@@ -10,13 +10,12 @@ impl Evaluator {
         evaluator
     }
 
-    pub fn evaluate_program(&mut self, stmts: Program) -> Result<Object> {
+    pub fn evaluate(&mut self, program: Program) -> Result<Object> {
         let mut obj = Object::Null;
-        for stmt in stmts.statements {
+        for stmt in program.statements {
             obj = self.evaluate_statement(stmt)?;
-            match obj {
-                Object::Return(value) => return Ok(*value),
-                _ => (),
+            if let Object::Return(value) = obj {
+                return Ok(*value);
             }
         }
 
@@ -27,9 +26,8 @@ impl Evaluator {
         let mut obj = Object::Null;
         for stmt in block.statements {
             obj = self.evaluate_statement(stmt)?;
-            match obj {
-                Object::Return(_) => return Ok(obj),
-                _ => (),
+            if let Object::Return(_) = obj {
+                return Ok(obj);
             }
         }
         Ok(obj)
@@ -258,6 +256,6 @@ if (10 > 1) {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program().unwrap();
         let mut evaluator = Evaluator::new();
-        evaluator.evaluate_program(program).unwrap()
+        evaluator.evaluate(program).unwrap()
     }
 }
