@@ -84,7 +84,7 @@ impl<'a> Parser<'a> {
     fn parse_return_statement(&mut self) -> Result<Statement> {
         self.next_token();
         let value = self.parse_expression(Precedence::Lowest)?;
-        while !self.peek_token_is(TokenKind::Semicolon) {
+        if self.peek_token_is(TokenKind::Semicolon) {
             self.next_token();
         }
 
