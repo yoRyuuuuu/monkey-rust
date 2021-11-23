@@ -14,8 +14,10 @@ impl Evaluator {
         let mut obj = Object::Null;
         for stmt in program.statements {
             obj = self.evaluate_statement(stmt)?;
-            if let Object::Return(value) = obj {
-                return Ok(*value);
+            match obj {
+                Object::Return(value) => return Ok(*value),
+                Object::Error(_) => return Ok(obj),
+                _ => (),
             }
         }
 
@@ -26,8 +28,10 @@ impl Evaluator {
         let mut obj = Object::Null;
         for stmt in block.statements {
             obj = self.evaluate_statement(stmt)?;
-            if let Object::Return(_) = obj {
-                return Ok(obj);
+            match obj {
+                Object::Return(value) => return Ok(*value),
+                Object::Error(_) => return Ok(obj),
+                _ => (),
             }
         }
         Ok(obj)
@@ -43,6 +47,9 @@ impl Evaluator {
 
     fn evaluate_return_statement(&mut self, expr: Expression) -> Result<Object> {
         let obj = self.evaluate_expression(expr)?;
+        if let Object::Error(_) = obj {
+            return Ok(obj);
+        }
         Ok(Object::Return(Box::new(obj)))
     }
 
@@ -53,11 +60,20 @@ impl Evaluator {
             Expression::Boolean(value) => Ok(Object::Boolean(value)),
             Expression::Prefix { op, right } => {
                 let right = self.evaluate_expression(*right)?;
+                if let Object::Error(_) = right {
+                    return Ok(right);
+                }
                 Ok(self.evaluate_prefix_expression(op, right))
             }
             Expression::Infix { left, op, right } => {
                 let left = self.evaluate_expression(*left)?;
+                if let Object::Error(_) = left {
+                    return Ok(left);
+                }
                 let right = self.evaluate_expression(*right)?;
+                if let Object::Error(_) = right {
+                    return Ok(right);
+                }
                 Ok(self.evaluate_infix_expression(op, left, right))
             }
             Expression::If {
@@ -80,6 +96,9 @@ impl Evaluator {
         alternative: Option<BlockStatement>,
     ) -> Result<Object> {
         let condition = self.evaluate_expression(condition)?;
+        if let Object::Error(_) = condition {
+            return Ok(condition);
+        }
         if Self::is_truthy(condition) {
             return self.evaluate_block_statement(consequence);
         }
@@ -95,7 +114,7 @@ impl Evaluator {
         match op.as_str() {
             "!" => self.evaluate_bang_operator_expression(right),
             "-" => self.evaluate_minus_prefix_operator_expression(right),
-            _ => Object::Null,
+            _ => Object::Error(format!("unknown operator: {}{}", op, &right.type_info())),
         }
     }
 
@@ -104,7 +123,20 @@ impl Evaluator {
             (_, Object::Int(l), Object::Int(r)) => self.evaluate_int_infix_expression(op, l, r),
             ("==", Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l == r),
             ("!=", Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l != r),
-            _ => Object::Null,
+            (_, _left, _right) if _left.type_info() != _right.type_info() => {
+                Object::Error(format!(
+                    "type mismatch: {} {} {}",
+                    _left.type_info(),
+                    op,
+                    _right.type_info()
+                ))
+            }
+            (_, _left, _right) => Object::Error(format!(
+                "unknown operator: {} {} {}",
+                _left.type_info(),
+                op,
+                _right.type_info()
+            )),
         }
     }
 
@@ -118,14 +150,14 @@ impl Evaluator {
             ">" => Object::Boolean(left > right),
             "==" => Object::Boolean(left == right),
             "!=" => Object::Boolean(left != right),
-            _ => Object::Null,
+            _ => Object::Error(format!("unknown operator: INTEGER {} INTEGER", op)),
         }
     }
 
     fn evaluate_minus_prefix_operator_expression(&mut self, right: Object) -> Object {
         match right {
             Object::Int(value) => Object::Int(-value),
-            _ => Object::Null,
+            _ => Object::Error(format!("unknown operator: -{}", right.type_info())),
         }
     }
 
@@ -248,6 +280,34 @@ if (10 > 1) {
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Int(test.1));
+        }
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let tests = vec![
+            ("5 + true;", "type mismatch: INTEGER + BOOLEAN"),
+            ("5 + true; 5;", "type mismatch: INTEGER + BOOLEAN"),
+            ("-true", "unknown operator: -BOOLEAN"),
+            ("true + false", "unknown operator: BOOLEAN + BOOLEAN"),
+            ("5; true + false;  5", "unknown operator: BOOLEAN + BOOLEAN"),
+            (
+                "if (10 > 1) { true + false; }",
+                "unknown operator: BOOLEAN + BOOLEAN",
+            ),
+            (
+                r#"if (10 > 1) {
+    if (10 > 1) {
+        return true + false;
+    }
+}"#,
+                "unknown operator: BOOLEAN + BOOLEAN",
+            ),
+        ];
+
+        for test in tests {
+            let object = test_evaluate(test.0);
+            assert_eq!(object.to_string(), format!("Error: {}", test.1))
         }
     }
 

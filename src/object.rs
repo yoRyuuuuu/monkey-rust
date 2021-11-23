@@ -6,6 +6,18 @@ pub enum Object {
     Boolean(bool),
     Null,
     Return(Box<Object>),
+    Error(String),
+}
+
+impl Object {
+    pub fn type_info(&self) -> String {
+        match self {
+            Object::Int(_) => "INTEGER",
+            Object::Boolean(_) => "BOOLEAN",
+            _ => unreachable!(),
+        }
+        .to_string()
+    }
 }
 
 impl fmt::Display for Object {
@@ -15,6 +27,7 @@ impl fmt::Display for Object {
             Object::Boolean(value) => write!(f, "{}", value),
             Object::Null => write!(f, "null"),
             Object::Return(obj) => write!(f, "{}", *obj),
+            Object::Error(obj) => write!(f, "Error: {}", obj),
         }
     }
 }
