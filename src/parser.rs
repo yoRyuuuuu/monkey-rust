@@ -443,6 +443,25 @@ mod tests {
     }
 
     #[test]
+    fn test_return_statement() {
+        let input = r#"return 5;
+return 10;
+return 993322;"#;
+
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let actual = parser.parse_program().unwrap();
+        assert_eq!(actual.statements.len(), 3);
+        let want = vec!["5", "10", "993322"];
+        for (stmt, w) in actual.statements.iter().zip(want) {
+            match stmt {
+                Statement::Return(value) => assert_eq!(value.to_string(), w),
+                _ => panic!(),
+            }
+        }
+    }
+
+    #[test]
     fn test_operator_precedence_parsing() {
         let tests = vec![
             ("-a * b", "((-a) * b)"),
