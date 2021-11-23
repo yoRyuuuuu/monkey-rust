@@ -1,13 +1,15 @@
 use crate::ast::{BlockStatement, Expression, Program, Statement};
-use crate::object::{self, Object};
+use crate::environment::Environment;
+use crate::object::Object;
 use anyhow::Result;
 
-pub struct Evaluator {}
+pub struct Evaluator<'a> {
+    pub env: &'a mut Environment,
+}
 
-impl Evaluator {
-    pub fn new() -> Evaluator {
-        let evaluator = Self {};
-        evaluator
+impl<'a> Evaluator<'a> {
+    pub fn new(env: &'a mut Environment) -> Evaluator {
+        Self { env }
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Object> {
@@ -20,7 +22,6 @@ impl Evaluator {
                 _ => (),
             }
         }
-
         Ok(obj)
     }
 
@@ -40,9 +41,22 @@ impl Evaluator {
     pub fn evaluate_statement(&mut self, stmt: Statement) -> Result<Object> {
         match stmt {
             Statement::Expression(expr) => self.evaluate_expression(expr),
-            Statement::Let { ident, value } => todo!(),
+            Statement::Let { ident, value } => self.evaluate_let_statement(ident, value),
             Statement::Return(expr) => self.evaluate_return_statement(expr),
         }
+    }
+
+    fn evaluate_let_statement(&mut self, ident: Expression, expr: Expression) -> Result<Object> {
+        let name = match ident {
+            Expression::Ident(name) => name,
+            _ => unreachable!(),
+        };
+        let obj = self.evaluate_expression(expr)?;
+        if let Object::Error(_) = obj {
+            return Ok(obj);
+        }
+        let obj = self.env.set(&name, obj);
+        Ok(obj)
     }
 
     fn evaluate_return_statement(&mut self, expr: Expression) -> Result<Object> {
@@ -56,7 +70,7 @@ impl Evaluator {
     pub fn evaluate_expression(&mut self, expr: Expression) -> Result<Object> {
         match expr {
             Expression::Int(value) => Ok(Object::Int(value)),
-            Expression::Ident(_) => todo!(),
+            Expression::Ident(name) => Ok(self.evaluate_identifier(name)),
             Expression::Boolean(value) => Ok(Object::Boolean(value)),
             Expression::Prefix { op, right } => {
                 let right = self.evaluate_expression(*right)?;
@@ -170,6 +184,13 @@ impl Evaluator {
         }
     }
 
+    fn evaluate_identifier(&mut self, name: String) -> Object {
+        match self.env.get(&name) {
+            Some(obj) => obj,
+            None => Object::Error(format!("identifier not found: {}", name)),
+        }
+    }
+
     fn is_truthy(obj: Object) -> bool {
         match obj {
             Object::Null => false,
@@ -181,7 +202,10 @@ impl Evaluator {
 
 #[cfg(test)]
 mod tests {
-    use crate::{evaluator::Evaluator, lexer::Lexer, object::Object, parser::Parser};
+    use crate::{
+        environment::Environment, evaluator::Evaluator, lexer::Lexer, object::Object,
+        parser::Parser,
+    };
 
     #[test]
     fn test_evaluate_interger_expression() {
@@ -303,6 +327,7 @@ if (10 > 1) {
 }"#,
                 "unknown operator: BOOLEAN + BOOLEAN",
             ),
+            ("foobar", "identifier not found: foobar"),
         ];
 
         for test in tests {
@@ -311,11 +336,27 @@ if (10 > 1) {
         }
     }
 
+    #[test]
+    fn test_let_statement() {
+        let tests = vec![
+            ("let a = 5; a;", 5),
+            ("let a = 5 * 5; a;", 25),
+            ("let a = 5; let b = a; b;", 5),
+            ("let a = 5; let b = a; let c = a + b + 5; c;", 15)
+        ];
+
+        for test in tests {
+            let object = test_evaluate(test.0);
+            assert_eq!(object, Object::Int(test.1));
+        }
+    }
+
     fn test_evaluate(input: &str) -> Object {
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program().unwrap();
-        let mut evaluator = Evaluator::new();
+        let mut env = Environment::new();
+        let mut evaluator = Evaluator::new(&mut env);
         evaluator.evaluate(program).unwrap()
     }
 }
