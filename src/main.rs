@@ -24,10 +24,7 @@ fn main() {
         let mut parser = Parser::new(lexer);
         let mut evaluator = Evaluator::new(&mut env);
         match parser.parse_program() {
-            Ok(program) => match evaluator.evaluate(program) {
-                Ok(object) => println!("{}", object),
-                Err(e) => eprintln!("{}", e),
-            },
+            Ok(program) => println!("{}", evaluator.evaluate(program)),
             Err(e) => eprintln!("{}", e),
         }
     }

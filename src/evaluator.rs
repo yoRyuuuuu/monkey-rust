@@ -1,7 +1,6 @@
 use crate::ast::{BlockStatement, Expression, Program, Statement};
 use crate::environment::Environment;
 use crate::object::Object;
-use anyhow::Result;
 
 pub struct Evaluator<'a> {
     pub env: &'a mut Environment,
@@ -12,33 +11,33 @@ impl<'a> Evaluator<'a> {
         Self { env }
     }
 
-    pub fn evaluate(&mut self, program: Program) -> Result<Object> {
+    pub fn evaluate(&mut self, program: Program) -> Object {
         let mut obj = Object::Null;
         for stmt in program.statements {
-            obj = self.evaluate_statement(stmt)?;
+            obj = self.evaluate_statement(stmt);
             match obj {
-                Object::Return(value) => return Ok(*value),
-                Object::Error(_) => return Ok(obj),
+                Object::Return(value) => return *value,
+                Object::Error(_) => return obj,
                 _ => (),
             }
         }
-        Ok(obj)
+        obj
     }
 
-    fn evaluate_block_statement(&mut self, block: BlockStatement) -> Result<Object> {
+    fn evaluate_block_statement(&mut self, block: BlockStatement) -> Object {
         let mut obj = Object::Null;
         for stmt in block.statements {
-            obj = self.evaluate_statement(stmt)?;
+            obj = self.evaluate_statement(stmt);
             match obj {
-                Object::Return(value) => return Ok(*value),
-                Object::Error(_) => return Ok(obj),
+                Object::Return(value) => return *value,
+                Object::Error(_) => return obj,
                 _ => (),
             }
         }
-        Ok(obj)
+        obj
     }
 
-    pub fn evaluate_statement(&mut self, stmt: Statement) -> Result<Object> {
+    pub fn evaluate_statement(&mut self, stmt: Statement) -> Object {
         match stmt {
             Statement::Expression(expr) => self.evaluate_expression(expr),
             Statement::Let { ident, value } => self.evaluate_let_statement(ident, value),
@@ -46,61 +45,105 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_let_statement(&mut self, ident: Expression, expr: Expression) -> Result<Object> {
+    fn evaluate_let_statement(&mut self, ident: Expression, expr: Expression) -> Object {
         let name = match ident {
             Expression::Ident(name) => name,
             _ => unreachable!(),
         };
-        let obj = self.evaluate_expression(expr)?;
+        let obj = self.evaluate_expression(expr);
         if let Object::Error(_) = obj {
-            return Ok(obj);
+            return obj;
         }
-        let obj = self.env.set(&name, obj);
-        Ok(obj)
+        self.env.set(&name, obj)
     }
 
-    fn evaluate_return_statement(&mut self, expr: Expression) -> Result<Object> {
-        let obj = self.evaluate_expression(expr)?;
+    fn evaluate_return_statement(&mut self, expr: Expression) -> Object {
+        let obj = self.evaluate_expression(expr);
         if let Object::Error(_) = obj {
-            return Ok(obj);
+            return obj;
         }
-        Ok(Object::Return(Box::new(obj)))
+        Object::Return(Box::new(obj))
     }
 
-    pub fn evaluate_expression(&mut self, expr: Expression) -> Result<Object> {
+    pub fn evaluate_expression(&mut self, expr: Expression) -> Object {
         match expr {
-            Expression::Int(value) => Ok(Object::Int(value)),
-            Expression::Ident(name) => Ok(self.evaluate_identifier(name)),
-            Expression::Boolean(value) => Ok(Object::Boolean(value)),
+            Expression::Int(value) => Object::Int(value),
+            Expression::Ident(name) => self.evaluate_identifier(name),
+            Expression::Boolean(value) => Object::Boolean(value),
             Expression::Prefix { op, right } => {
-                let right = self.evaluate_expression(*right)?;
+                let right = self.evaluate_expression(*right);
                 if let Object::Error(_) = right {
-                    return Ok(right);
+                    return right;
                 }
-                Ok(self.evaluate_prefix_expression(op, right))
+                self.evaluate_prefix_expression(op, right)
             }
             Expression::Infix { left, op, right } => {
-                let left = self.evaluate_expression(*left)?;
+                let left = self.evaluate_expression(*left);
                 if let Object::Error(_) = left {
-                    return Ok(left);
+                    return left;
                 }
-                let right = self.evaluate_expression(*right)?;
+                let right = self.evaluate_expression(*right);
                 if let Object::Error(_) = right {
-                    return Ok(right);
+                    return right;
                 }
-                Ok(self.evaluate_infix_expression(op, left, right))
+                self.evaluate_infix_expression(op, left, right)
             }
             Expression::If {
                 condition,
                 consequence,
                 alternative,
             } => self.evaluate_if_expression(*condition, consequence, alternative),
-            Expression::Function { parameters, body } => todo!(),
+            Expression::Function { parameters, body } => Object::Function {
+                parameters,
+                body,
+                environment: self.env.clone(),
+            },
             Expression::Call {
                 function,
                 arguments,
-            } => todo!(),
+            } => {
+                let func = self.evaluate_expression(*function);
+                if let Object::Error(_) = func {
+                    return func;
+                }
+                let args = self.evaluate_expressions(arguments);
+                self.apply_function(func, args)
+            }
         }
+    }
+
+    fn apply_function(&mut self, func: Object, args: Vec<Object>) -> Object {
+        match func {
+            Object::Function {
+                parameters,
+                body,
+                environment,
+            } => {
+                let mut env = Environment::new_enclosed(environment);
+                for (i, param) in parameters.iter().enumerate() {
+                    env.set(param, args[i].clone());
+                }
+                let mut evaluator = Evaluator::new(&mut env);
+                let obj = evaluator.evaluate_block_statement(body);
+                match obj {
+                    Object::Return(obj) => *obj,
+                    _ => obj,
+                }
+            }
+            _ => Object::Error(format!("not a function: {}", func.type_info())),
+        }
+    }
+
+    fn evaluate_expressions(&mut self, exprs: Vec<Expression>) -> Vec<Object> {
+        let mut result = vec![];
+        for expr in exprs {
+            let obj = self.evaluate_expression(expr);
+            if let Object::Error(_) = obj {
+                return vec![obj];
+            }
+            result.push(obj);
+        }
+        result
     }
 
     fn evaluate_if_expression(
@@ -108,10 +151,10 @@ impl<'a> Evaluator<'a> {
         condition: Expression,
         consequence: BlockStatement,
         alternative: Option<BlockStatement>,
-    ) -> Result<Object> {
-        let condition = self.evaluate_expression(condition)?;
+    ) -> Object {
+        let condition = self.evaluate_expression(condition);
         if let Object::Error(_) = condition {
-            return Ok(condition);
+            return condition;
         }
         if Self::is_truthy(condition) {
             return self.evaluate_block_statement(consequence);
@@ -121,7 +164,7 @@ impl<'a> Evaluator<'a> {
             return self.evaluate_block_statement(alternative);
         }
 
-        Ok(Object::Null)
+        Object::Null
     }
 
     fn evaluate_prefix_expression(&mut self, op: String, right: Object) -> Object {
@@ -342,12 +385,44 @@ if (10 > 1) {
             ("let a = 5; a;", 5),
             ("let a = 5 * 5; a;", 25),
             ("let a = 5; let b = a; b;", 5),
-            ("let a = 5; let b = a; let c = a + b + 5; c;", 15)
+            ("let a = 5; let b = a; let c = a + b + 5; c;", 15),
         ];
 
         for test in tests {
             let object = test_evaluate(test.0);
             assert_eq!(object, Object::Int(test.1));
+        }
+    }
+
+    #[test]
+    fn test_evaluate_function() {
+        let tests = vec![
+            ("let identity = fn(x) { x; }; identity(5);", 5),
+            ("let identity = fn(x) { return x; }; identity(5);", 5),
+            ("let double = fn(x) { x * 2; }; double(5);", 10),
+            ("let add = fn(x, y) { x + y; }; add(5, 5);", 10),
+            ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20),
+            ("fn(x) { x; }(5)", 5),
+        ];
+
+        for test in tests {
+            let object = test_evaluate(test.0);
+            assert_eq!(object, Object::Int(test.1));
+        }
+    }
+
+    #[test]
+    fn test_function_object() {
+        let input = "fn(x) { x + 2 };";
+        let evaluated = test_evaluate(input);
+        if let Object::Function {
+            parameters,
+            body,
+            environment: _,
+        } = evaluated
+        {
+            assert_eq!(parameters[0], "x");
+            assert_eq!(body.to_string(), "(x + 2)")
         }
     }
 
@@ -357,6 +432,6 @@ if (10 > 1) {
         let program = parser.parse_program().unwrap();
         let mut env = Environment::new();
         let mut evaluator = Evaluator::new(&mut env);
-        evaluator.evaluate(program).unwrap()
+        evaluator.evaluate(program)
     }
 }
